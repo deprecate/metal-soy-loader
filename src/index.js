@@ -58,8 +58,6 @@ export default function metalSoyLoader(contents) {
 	stream.on('end', file => {
 		writeToCache(resourcePath, result);
 
-		fileHashMap[resourcePath] = curHash;
-
 		loaderCallback(null, result);
 	});
 }
@@ -80,6 +78,8 @@ function getCachedResult(resourcePath, curHash) {
 			result = readFromCache(resourcePath);
 		} catch (e) {}
 	}
+
+	fileHashMap[resourcePath] = curHash;
 
 	return result;
 }
