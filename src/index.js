@@ -1,5 +1,5 @@
 import compileSoy from 'metal-tools-soy/lib/pipelines/compileSoy';
-import fs from 'fs';
+import fs from 'fs-extra';
 import glob from 'glob';
 import loaderUtils from 'loader-utils';
 import md5 from 'md5';
@@ -216,6 +216,8 @@ function writeToCache(resourcePath, contents) {
 		cacheDir,
 		path.relative(path.join(process.cwd(), 'src'), resourcePath) + '.js',
 	);
+
+	fs.ensureDirSync(path.dirname(filePath));
 
 	return fs.writeFileSync(filePath, contents);
 }
