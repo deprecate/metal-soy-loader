@@ -28,7 +28,7 @@ export default function metalSoyLoader(contents) {
 
 	const curHash = md5(contents);
 
-	const result = getCachedResult(resourcePath, hash);
+	let result = getCachedResult(resourcePath, hash);
 
 	if (result) {
 		return result;
