@@ -2,27 +2,39 @@ import compileSoy from 'metal-tools-soy/lib/pipelines/compileSoy';
 import fs from 'fs';
 import glob from 'glob';
 import loaderUtils from 'loader-utils';
+import md5 from 'md5';
 import path from 'path';
 import soyparser, { traverse } from 'soyparser';
 import vfs from 'vinyl-fs';
 
 const globsCache = {};
 
+const fileHashMap = {};
+
 const soyAstCache = {};
+
+const cacheDir = path.join(process.cwd(), '.soycache');
 
 /**
  * metal-soy-loader
  */
-export default function metalSoyLoader() {
-	const loaderCallback = this.async();
+export default function metalSoyLoader(contents) {
 	const loaderOptions = setDefaults(loaderUtils.getOptions(this));
-
 	let resourcePath = this.resourcePath;
 
 	if (path.extname(resourcePath) === '.js') {
 		resourcePath = resourcePath.substring(0, resourcePath.indexOf('.js'));
 	}
 
+	const curHash = md5(contents);
+
+	const result = getCachedResult(resourcePath, hash);
+
+	if (result) {
+		return result;
+	}
+
+	const loaderCallback = this.async();
 	const srcPaths = resolveGlob(loaderOptions.src);
 
 	const externalCalls = getExternalSoyCalls(
@@ -41,8 +53,35 @@ export default function metalSoyLoader() {
 	);
 
 	stream.on('data', file => {
-		loaderCallback(null, file.contents.toString());
+		result = file.contents.toString();
 	});
+	stream.on('end', file => {
+		writeToCache(resourcePath, result);
+
+		fileHashMap[resourcePath] = curHash;
+
+		loaderCallback(null, result);
+	});
+}
+
+/**
+ * Returns cached file if possible
+ * @param {!string} resourcePath
+ * @param {!string} curHash current md5 hash of file contents
+ */
+function getCachedResult(resourcePath, curHash) {
+	const prevHash = fileHashMap[resourcePath];
+
+	const valid = !prevHash || curHash === prevHash;
+	let result;
+
+	if (valid) {
+		try {
+			result = readFromCache(resourcePath);
+		} catch (e) {}
+	}
+
+	return result;
 }
 
 /**
@@ -107,6 +146,20 @@ function getParsedSoyByNamespace(namespace, filePaths) {
 }
 
 /**
+ * Reads compiled soy from soy cache
+ * @param {!string} resoucePath
+ * @return {string}
+ */
+function readFromCache(resourcePath) {
+	const filePath = path.join(
+		cacheDir,
+		path.relative(path.join(process.cwd(), 'src'), resourcePath) + '.js',
+	);
+
+	return fs.readFileSync(filePath, 'utf8');
+}
+
+/**
  * Resolves glob file pattern
  * @param {!string} pattern file glob pattern
  * @return {Array} list of file paths
@@ -152,4 +205,17 @@ function setDefaults(loaderOptions) {
 	}
 
 	return loaderOptions;
+}
+
+/**
+ * Writes compiled soy to soy cache
+ * @param {!string} resourcePath
+ */
+function writeToCache(resourcePath, contents) {
+	const filePath = path.join(
+		cacheDir,
+		path.relative(path.join(process.cwd(), 'src'), resourcePath) + '.js',
+	);
+
+	return fs.writeFileSync(filePath, contents);
 }
